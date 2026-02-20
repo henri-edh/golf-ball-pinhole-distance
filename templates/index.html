@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Golf Ball Distance Estimator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #111; color: #eee; }
+    h1 { color: #00ccff; }
+    .card { background: #222; padding: 16px; border-radius: 8px; max-width: 900px; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; }
+    label { display: block; margin-top: 8px; }
+    input[type="number"], input[type="file"] { width: 100%; padding: 6px; margin-top: 4px; }
+    button { margin-top: 12px; padding: 8px 16px; background: #00ccff; border: none; color: #000;
+             font-weight: bold; cursor: pointer; border-radius: 4px; }
+    button:hover { background: #00b0e0; }
+    img { max-width: 100%; height: auto; margin-top: 12px; border-radius: 6px; }
+    .error { color: #ff6666; margin-top: 8px; }
+    .result-table { margin-top: 12px; border-collapse: collapse; width: 100%; }
+    .result-table th, .result-table td { border: 1px solid #444; padding: 6px 8px; }
+    .result-table th { background: #333; }
+  </style>
+</head>
+<body>
+  <h1>Golf Ball Distance Estimator (Web)</h1>
+
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <label>Upload golf ball image:
+        <input type="file" name="image" accept="image/*" required>
+      </label>
+
+      <div class="row">
+        <div style="flex: 1 1 200px;">
+          <label>Camera tilt (deg):
+            <input
+              type="number"
+              name="tilt_deg"
+              step="0.1"
+              value="{{ (result.tilt_deg if result else default_tilt) }}"
+            >
+          </label>
+        </div>
+        <div style="flex: 1 1 200px;">
+          <label>Ball diameter (mm):
+            <input
+              type="number"
+              name="ball_diam_mm"
+              step="0.01"
+              value="{{ (result.ball_diam_mm if result else default_diam) }}"
+            >
+          </label>
+        </div>
+      </div>
+
+      <button type="submit">Estimate Distance</button>
+    </form>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if result %}
+      <h2>Results</h2>
+      <table class="result-table">
+        <tr>
+          <th>Image size</th>
+          <td>{{ result.image_width }} × {{ result.image_height }} ({{ result.orientation }})</td>
+        </tr>
+        <tr>
+          <th>Ball diameter</th>
+          <td>{{ result.ball_px }} px, {{ result.ball_diam_mm }} mm</td>
+        </tr>
+        <tr>
+          <th>Focal length (px)</th>
+          <td>{{ "%.1f" % result.focal_length_px }}</td>
+        </tr>
+        <tr>
+          <th>Subtended angle</th>
+          <td>{{ "%.4f" % result.angle_deg }}°</td>
+        </tr>
+        <tr>
+          <th>Straight-line distance</th>
+          <td>{{ "%.2f" % result.straight_m }} m</td>
+        </tr>
+        <tr>
+          <th>Ground distance</th>
+          <td>
+            {{ "%.2f" % result.ground_m }} m
+            ({{ "%.1f" % result.ground_ft }} ft / {{ "%.1f" % result.ground_yd }} yd)
+          </td>
+        </tr>
+        <tr>
+          <th>Height component</th>
+          <td>{{ "%.2f" % result.height_m }} m</td>
+        </tr>
+        <tr>
+          <th>Tilt angle</th>
+          <td>{{ result.tilt_deg }}°</td>
+        </tr>
+      </table>
+
+      {% if result.annotated_image %}
+        <h3>Annotated image</h3>
+        <img src="{{ url_for('uploaded_file', filename=result.annotated_image) }}" alt="Annotated">
+      {% endif %}
+    {% endif %}
+  </div>
+</body>
+</html>
