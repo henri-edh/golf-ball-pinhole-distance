@@ -4,106 +4,376 @@
   <meta charset="utf-8">
   <title>Golf Ball Distance Estimator</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #111; color: #eee; }
-    h1 { color: #00ccff; }
-    .card { background: #222; padding: 16px; border-radius: 8px; max-width: 900px; }
-    .row { display: flex; flex-wrap: wrap; gap: 16px; }
-    label { display: block; margin-top: 8px; }
-    input[type="number"], input[type="file"] { width: 100%; padding: 6px; margin-top: 4px; }
-    button { margin-top: 12px; padding: 8px 16px; background: #00ccff; border: none; color: #000;
-             font-weight: bold; cursor: pointer; border-radius: 4px; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 20px;
+           background: #111; color: #eee; }
+    h1 { color: #00ccff; margin-bottom: 8px; }
+    h2 { color: #00ccff; }
+    .card { background: #222; padding: 16px; border-radius: 8px;
+            max-width: 1200px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    label { display: block; margin-top: 8px; font-size: 0.88em; color: #bbb; }
+    input[type="number"], input[type="file"] {
+      width: 100%; padding: 6px; margin-top: 4px;
+      background: #333; color: #eee;
+      border: 1px solid #555; border-radius: 3px;
+    }
+    button { padding: 8px 20px; background: #00ccff; border: none;
+             color: #000; font-weight: bold; cursor: pointer;
+             border-radius: 4px; font-size: 1em; margin-top: 10px; }
     button:hover { background: #00b0e0; }
-    img { max-width: 100%; height: auto; margin-top: 12px; border-radius: 6px; }
-    .error { color: #ff6666; margin-top: 8px; }
-    .result-table { margin-top: 12px; border-collapse: collapse; width: 100%; }
-    .result-table th, .result-table td { border: 1px solid #444; padding: 6px 8px; }
-    .result-table th { background: #333; }
+    .error  { color: #ff6666; margin-top: 10px; font-weight: bold; }
+    .info   { color: #ffcc44; font-size: 0.88em; margin-top: 8px; }
+    hr { border-color: #444; margin: 16px 0; }
+    .spinner { display: none; color: #00ccff; margin-top: 10px; font-style: italic; }
+    .spinner.active { display: block; }
+
+    /* Clickable image scene */
+    .scene {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      margin-top: 8px;
+      cursor: crosshair;
+    }
+    .scene img {
+      display: block;
+      max-width: 700px;
+      width: 100%;
+      height: auto;
+      border-radius: 6px;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+    #overlay-canvas {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      border-radius: 6px;
+    }
+
+    /* Magnifier */
+    #magnifier {
+      position: absolute;
+      width: 180px; height: 180px;
+      border: 2px solid #00ccff;
+      border-radius: 50%;
+      pointer-events: none;
+      display: none;
+      box-shadow: 0 0 8px #00ccff88;
+      overflow: hidden;
+      z-index: 10;
+    }
+    #magnifier canvas { display: block; }
+
+    /* Zoom bar */
+    .zoom-bar { margin-top: 6px; display: flex; gap: 8px;
+                align-items: center; font-size: 0.85em; color: #aaa; }
+    .zoom-bar button { margin: 0; padding: 4px 10px; font-size: 0.85em; }
+    .zoom-bar button.active { background: #00ffaa; color: #000; }
+
+    /* Side-by-side results */
+    .img-pair { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    .img-box  { flex: 1 1 300px; }
+    .img-box p { text-align: center; font-size: 0.82em;
+                 color: #aaa; margin: 4px 0; }
+    .img-box img { width: 100%; height: auto;
+                   border-radius: 6px; display: block; }
+
+    /* Results table */
+    .result-table { margin-top: 14px; border-collapse: collapse; width: 100%; }
+    .result-table th,
+    .result-table td { border: 1px solid #3a3a3a; padding: 8px 12px; }
+    .result-table th { background: #2a2a2a; color: #999;
+                       font-size: 0.88em; text-align: left; width: 38%; }
+    .big   { font-size: 1.4em; font-weight: bold; color: #00ff88; }
+    .small { font-size: 0.85em; color: #aaa; margin-left: 8px; }
+    .badge-auto  { color: #00ff88; font-size: 0.6em; margin-left: 8px; }
+    .badge-click { color: #00ccff; font-size: 0.6em; margin-left: 8px; }
   </style>
 </head>
 <body>
-  <h1>Golf Ball Distance Estimator (Web)</h1>
+<h1>⛳ Golf Ball Distance Estimator</h1>
+<div class="card">
 
-  <div class="card">
-    <form method="post" enctype="multipart/form-data">
-      <label>Upload golf ball image:
-        <input type="file" name="image" accept="image/*" required>
-      </label>
-
-      <div class="row">
-        <div style="flex: 1 1 200px;">
-          <label>Camera tilt (deg):
-            <input
-              type="number"
-              name="tilt_deg"
-              step="0.1"
-              value="{{ (result.tilt_deg if result else default_tilt) }}"
-            >
-          </label>
-        </div>
-        <div style="flex: 1 1 200px;">
-          <label>Ball diameter (mm):
-            <input
-              type="number"
-              name="ball_diam_mm"
-              step="0.01"
-              value="{{ (result.ball_diam_mm if result else default_diam) }}"
-            >
-          </label>
-        </div>
+  <!-- ── Upload form ─────────────────────────────────── -->
+  <form method="post" enctype="multipart/form-data" id="upload-form">
+    <input type="hidden" name="action" value="upload">
+    <div class="row">
+      <div style="flex: 2 1 260px;">
+        <label>Image frame:
+          <input type="file" name="image" accept="image/*" required>
+        </label>
       </div>
+      <div style="flex: 1 1 130px;">
+        <label>Camera height (mm):
+          <input type="number" name="camera_height_mm" step="1"
+                 value="{{ default_camera_height_mm }}">
+        </label>
+      </div>
+      <div style="flex: 1 1 110px;">
+        <label>Ball ⌀ (mm):
+          <input type="number" name="ball_diam_mm" step="0.01"
+                 value="{{ default_diam }}">
+        </label>
+      </div>
+      <div>
+        <button type="submit" id="upload-btn">🔍 Detect &amp; Estimate</button>
+      </div>
+    </div>
+  </form>
 
-      <button type="submit">Estimate Distance</button>
-    </form>
+  <div class="spinner" id="spinner">⏳ Running YOLO11 detection…</div>
 
-    {% if error %}
-      <div class="error">{{ error }}</div>
-    {% endif %}
+  {% if error %}
+    <div class="error">⚠ {{ error }}</div>
+  {% endif %}
 
-    {% if result %}
-      <h2>Results</h2>
-      <table class="result-table">
-        <tr>
-          <th>Image size</th>
-          <td>{{ result.image_width }} × {{ result.image_height }} ({{ result.orientation }})</td>
-        </tr>
-        <tr>
-          <th>Ball diameter</th>
-          <td>{{ result.ball_px }} px, {{ result.ball_diam_mm }} mm</td>
-        </tr>
-        <tr>
-          <th>Focal length (px)</th>
-          <td>{{ "%.1f" % result.focal_length_px }}</td>
-        </tr>
-        <tr>
-          <th>Subtended angle</th>
-          <td>{{ "%.4f" % result.angle_deg }}°</td>
-        </tr>
-        <tr>
-          <th>Straight-line distance</th>
-          <td>{{ "%.2f" % result.straight_m }} m</td>
-        </tr>
-        <tr>
-          <th>Ground distance</th>
-          <td>
-            {{ "%.2f" % result.ground_m }} m
-            ({{ "%.1f" % result.ground_ft }} ft / {{ "%.1f" % result.ground_yd }} yd)
-          </td>
-        </tr>
-        <tr>
-          <th>Height component</th>
-          <td>{{ "%.2f" % result.height_m }} m</td>
-        </tr>
-        <tr>
-          <th>Tilt angle</th>
-          <td>{{ result.tilt_deg }}°</td>
-        </tr>
-      </table>
+  <!-- ── Always-visible clickable image ─────────────────── -->
+  {% if image_info %}
+  <hr>
 
-      {% if result.annotated_image %}
-        <h3>Annotated image</h3>
-        <img src="{{ url_for('uploaded_file', filename=result.annotated_image) }}" alt="Annotated">
-      {% endif %}
-    {% endif %}
+  {% if result and result.n_detections > 1 %}
+    <div class="info">
+      ⚠ {{ result.n_detections }} balls detected.
+      Click the <strong>correct ball</strong> below to override.
+    </div>
+  {% else %}
+    <div class="info">
+      🖱 Click any ball to override the detection.
+    </div>
+  {% endif %}
+
+  <!-- Zoom bar -->
+  <div class="zoom-bar">
+    Magnifier:
+    <button class="zoom-btn" data-z="3">3×</button>
+    <button class="zoom-btn active" data-z="5">5×</button>
+    <button class="zoom-btn" data-z="8">8×</button>
+    <button class="zoom-btn" data-z="12">12×</button>
   </div>
+
+  <!-- Hidden override form -->
+  <form method="post" id="click-form">
+    <input type="hidden" name="action"        value="click_override">
+    <input type="hidden" name="current_image" value="{{ image_info.filename }}">
+    <input type="hidden" id="click_x"         name="click_x" value="">
+    <input type="hidden" id="click_y"         name="click_y" value="">
+    <input type="hidden" name="camera_height_mm"
+           value="{{ default_camera_height_mm }}">
+    <input type="hidden" name="ball_diam_mm"
+           value="{{ default_diam }}">
+  </form>
+
+  <!-- Image with overlay + magnifier -->
+  <div class="scene" id="scene">
+    <img id="main-img"
+         src="{{ url_for('uploaded_file', filename=image_info.filename) }}"
+         alt="Frame">
+    <canvas id="overlay-canvas"></canvas>
+    <div id="magnifier">
+      <canvas id="mag-canvas" width="180" height="180"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Results ──────────────────────────────────────────── -->
+  {% if result %}
+  <hr>
+  <h2>Results
+    {% if result.mode == "Auto" %}
+      <span class="badge-auto">▲ Auto detection</span>
+    {% else %}
+      <span class="badge-click">◎ Click override</span>
+    {% endif %}
+  </h2>
+
+  <div class="img-pair">
+    <div class="img-box">
+      <p>Original</p>
+      <img src="{{ url_for('uploaded_file', filename=result.orig_image) }}"
+           alt="Original">
+    </div>
+    <div class="img-box">
+      <p>Annotated — green = selected, grey = others</p>
+      <img src="{{ url_for('uploaded_file', filename=result.annotated_image) }}"
+           alt="Annotated">
+    </div>
+  </div>
+
+  <table class="result-table">
+    <tr>
+      <th>Image size</th>
+      <td>{{ result.image_width }} × {{ result.image_height }} (Portrait)</td>
+    </tr>
+    <tr>
+      <th>Detection</th>
+      <td>{{ result.mode }}
+          &nbsp;|&nbsp; {{ result.n_detections }} ball(s) found
+          &nbsp;|&nbsp; confidence {{ "%.1f" % (result.confidence * 100) }}%
+      </td>
+    </tr>
+    <tr>
+      <th>Ball diameter (detected)</th>
+      <td>{{ result.ball_px }} px &nbsp;/&nbsp;
+          {{ result.ball_diam_mm }} mm (physical)</td>
+    </tr>
+    <tr>
+      <th>Focal length</th>
+      <td>{{ "%.1f" % result.focal_length_px }} px</td>
+    </tr>
+    <tr>
+      <th>Subtended angle</th>
+      <td>{{ "%.4f" % result.angle_deg }}°</td>
+    </tr>
+    <tr>
+      <th>Straight-line distance</th>
+      <td>{{ "%.2f" % result.straight_m }} m</td>
+    </tr>
+    <tr>
+      <th>Ground distance</th>
+      <td>
+        <span class="big">{{ "%.2f" % result.ground_m }} m</span>
+        <span class="small">
+          {{ "%.1f" % result.ground_ft }} ft &nbsp;/&nbsp;
+          {{ "%.1f" % result.ground_yd }} yd
+        </span>
+      </td>
+    </tr>
+    <tr>
+      <th>Camera height</th>
+      <td>{{ result.camera_height_mm }} mm above ground</td>
+    </tr>
+  </table>
+  {% endif %}
+
+</div><!-- .card -->
+
+<script>
+(function () {
+  const mainImg   = document.getElementById('main-img');
+  const canvas    = document.getElementById('overlay-canvas');
+  const scene     = document.getElementById('scene');
+  const magnifier = document.getElementById('magnifier');
+  const magCanvas = document.getElementById('mag-canvas');
+  const clickForm = document.getElementById('click-form');
+  const spinner   = document.getElementById('spinner');
+
+  // Upload spinner
+  const uploadForm = document.getElementById('upload-form');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function () {
+      if (spinner) spinner.classList.add('active');
+      const btn = document.getElementById('upload-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+    });
+  }
+
+  if (!mainImg || !canvas) return;
+
+  const ctx    = canvas.getContext('2d');
+  const magCtx = magCanvas.getContext('2d');
+  const MAG_SIZE = 180, MAG_OFFSET = 20;
+  let zoomFactor = 5;
+
+  function syncCanvas() {
+    canvas.width  = mainImg.clientWidth;
+    canvas.height = mainImg.clientHeight;
+  }
+  mainImg.addEventListener('load', syncCanvas);
+  window.addEventListener('resize', syncCanvas);
+
+  /* ── Magnifier ── */
+  function updateMagnifier(dx, dy) {
+    if (!mainImg.complete || !mainImg.naturalWidth) return;
+    let lx = dx + MAG_OFFSET;
+    let ly = dy - MAG_SIZE / 2;
+    if (lx + MAG_SIZE > scene.clientWidth)  lx = dx - MAG_SIZE - MAG_OFFSET;
+    if (ly < 0)                              ly = 0;
+    if (ly + MAG_SIZE > scene.clientHeight) ly = scene.clientHeight - MAG_SIZE;
+    magnifier.style.left    = lx + 'px';
+    magnifier.style.top     = ly + 'px';
+    magnifier.style.display = 'block';
+
+    const ix    = dx * mainImg.naturalWidth  / mainImg.clientWidth;
+    const iy    = dy * mainImg.naturalHeight / mainImg.clientHeight;
+    const cropW = MAG_SIZE / zoomFactor;
+    const cropH = MAG_SIZE / zoomFactor;
+    const sx = Math.max(0, Math.min(ix - cropW/2, mainImg.naturalWidth  - cropW));
+    const sy = Math.max(0, Math.min(iy - cropH/2, mainImg.naturalHeight - cropH));
+
+    magCtx.clearRect(0, 0, MAG_SIZE, MAG_SIZE);
+    magCtx.drawImage(mainImg, sx, sy, cropW, cropH, 0, 0, MAG_SIZE, MAG_SIZE);
+    magCtx.strokeStyle = 'rgba(0,204,255,0.9)';
+    magCtx.lineWidth = 1;
+    magCtx.beginPath();
+    magCtx.moveTo(MAG_SIZE/2-10, MAG_SIZE/2); magCtx.lineTo(MAG_SIZE/2+10, MAG_SIZE/2);
+    magCtx.moveTo(MAG_SIZE/2, MAG_SIZE/2-10); magCtx.lineTo(MAG_SIZE/2, MAG_SIZE/2+10);
+    magCtx.stroke();
+    magCtx.fillStyle = 'rgba(0,204,255,0.9)';
+    magCtx.font = '10px Arial';
+    magCtx.fillText(zoomFactor + '×', 4, 13);
+  }
+
+  /* ── Click marker on overlay ── */
+  function drawClickMarker(dx, dy) {
+    syncCanvas();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00ccff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dx-16, dy); ctx.lineTo(dx+16, dy);
+    ctx.moveTo(dx, dy-16); ctx.lineTo(dx, dy+16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(dx, dy, 12, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle = '#00ccff';
+    ctx.beginPath();
+    ctx.arc(dx, dy, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#00ccff';
+    ctx.font = '12px Arial';
+    ctx.fillText('Detecting…', dx + 16, dy - 4);
+  }
+
+  /* ── Mouse events ── */
+  scene.addEventListener('mousemove', function (e) {
+    const rect = scene.getBoundingClientRect();
+    updateMagnifier(e.clientX - rect.left, e.clientY - rect.top);
+  });
+  scene.addEventListener('mouseleave', function () {
+    magnifier.style.display = 'none';
+  });
+
+  /* ── Click → override ── */
+  mainImg.addEventListener('click', function (e) {
+    if (!clickForm) return;
+    const rect = mainImg.getBoundingClientRect();
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+    const ix = (dx * mainImg.naturalWidth  / mainImg.clientWidth).toFixed(2);
+    const iy = (dy * mainImg.naturalHeight / mainImg.clientHeight).toFixed(2);
+
+    document.getElementById('click_x').value = ix;
+    document.getElementById('click_y').value = iy;
+
+    drawClickMarker(dx, dy);
+    if (navigator.vibrate) navigator.vibrate(40);
+    if (spinner) spinner.classList.add('active');
+    clickForm.submit();
+  });
+
+  /* ── Zoom buttons ── */
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      zoomFactor = parseInt(this.dataset.z, 10);
+      document.querySelectorAll('.zoom-btn')
+              .forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+})();
+</script>
 </body>
 </html>
